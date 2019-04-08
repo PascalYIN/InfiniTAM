@@ -25,11 +25,75 @@
 #include "../../ORUtils/FileUtils.h"
 #include "../../InputSource/FFMPEGWriter.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+
 using namespace InfiniTAM::Engine;
 using namespace InputSource;
 using namespace ITMLib;
 
 UIEngine* UIEngine::instance;
+
+#define WindowWidth  1000 //new line
+#define WindowHeight 500 //new line
+
+#define BMP_Header_Length 54  //new line
+void grab(const char *savePath, int frameNumber)
+{
+    FILE*    pDummyFile;  //指向另一bmp文件，用于复制它的文件头和信息头数据
+    FILE*    pWritingFile;  //指向要保存截图的bmp文件
+    GLubyte* pPixelData;    //指向新的空的内存，用于保存截图bmp文件数据
+    GLubyte  BMP_Header[BMP_Header_Length];
+    GLint    i, j;
+    GLint    PixelDataLength;   //BMP文件数据总长度
+
+    // 计算像素数据的实际长度
+    i = WindowWidth * 3;   // 得到每一行的像素数据长度
+    while( i%4 != 0 )      // 补充数据，直到i是的倍数
+        ++i;
+    PixelDataLength = i * WindowHeight;  //补齐后的总位数
+
+    // 分配内存和打开文件
+    pPixelData = (GLubyte*)malloc(PixelDataLength);
+    if( pPixelData == 0 )
+        exit(0);
+
+    pDummyFile = fopen("bitmap_template.bmp", "rb");//只读形式打开
+    if( pDummyFile == 0 )
+    	exit(0);
+
+    char saveFrameName[250];
+    sprintf(saveFrameName,"./%s/screenshot_frame_%06d.bmp", savePath, frameNumber);
+    pWritingFile = fopen(saveFrameName, "wb"); //只写形式打开
+    if( pWritingFile == 0 )
+        exit(0);
+
+	//把读入的bmp文件的文件头和信息头数据复制，并修改宽高数据
+    fread(BMP_Header, sizeof(BMP_Header), 1, pDummyFile);  //读取文件头和信息头，占据54字节
+    fwrite(BMP_Header, sizeof(BMP_Header), 1, pWritingFile);
+    fseek(pWritingFile, 0x0012, SEEK_SET); //移动到0X0012处，指向图像宽度所在内存
+    i = WindowWidth;
+    j = WindowHeight;
+    fwrite(&i, sizeof(i), 1, pWritingFile);
+    fwrite(&j, sizeof(j), 1, pWritingFile);
+
+    // 读取当前画板上图像的像素数据
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);  //设置4位对齐方式
+    glReadPixels(0, 0, WindowWidth, WindowHeight,
+        GL_BGR_EXT, GL_UNSIGNED_BYTE, pPixelData);
+
+    // 写入像素数据
+    fseek(pWritingFile, 0, SEEK_END);
+	//把完整的BMP文件数据写入pWritingFile
+    fwrite(pPixelData, PixelDataLength, 1, pWritingFile);
+
+    // 释放内存和关闭文件
+    fclose(pDummyFile);
+    fclose(pWritingFile);
+    free(pPixelData);
+
+}
+
 
 static void safe_glutBitmapString(void *font, const char *str)
 {
@@ -125,9 +189,30 @@ void UIEngine::glutIdleFunction()
 		uiEngine->ProcessFrame(); uiEngine->processedFrameNo++;
 		uiEngine->mainLoopAction = PROCESS_PAUSED;
 		uiEngine->needsRefresh = true;
+		if (uiEngine->processedFrameNo % 20 == 0)
+		{
+			char saveName[100];
+			sprintf(saveName,"./%s/mesh/mesh_kf_%05d.stl",uiEngine->screenShotSavePath, uiEngine->processedFrameNo);
+			uiEngine->mainEngine->SaveSceneToMesh(saveName);
+
+		}
+		grab(uiEngine->screenShotSavePath, uiEngine->processedFrameNo);
 		break;
 	case PROCESS_VIDEO:
 		uiEngine->ProcessFrame(); uiEngine->processedFrameNo++;
+		//std::cout<<uiEngine->processedFrameNo<<std::endl;
+		if (uiEngine->processedFrameNo % 20 == 0)
+		{
+			char saveName[100];
+			sprintf(saveName,"./%s/mesh/mesh_kf_%05d.stl",uiEngine->screenShotSavePath, uiEngine->processedFrameNo);
+			uiEngine->mainEngine->SaveSceneToMesh(saveName);
+
+		}
+		grab(uiEngine->screenShotSavePath, uiEngine->processedFrameNo);
+		//char screenshotname[50];
+		//sprintf(screenshotname,"screenshot_kf_%05d.png",uiEngine->processedFrameNo);
+		//uiEngine->SaveScreenshot(screenshotname);
+
 		uiEngine->needsRefresh = true;
 		break;
 		//case SAVE_TO_DISK:
@@ -490,7 +575,7 @@ void UIEngine::glutMouseWheelFunction(int button, int dir, int x, int y)
 }
 
 void UIEngine::Initialise(int & argc, char** argv, ImageSourceEngine *imageSource, IMUSourceEngine *imuSource, ITMMainEngine *mainEngine,
-	const char *outFolder, ITMLibSettings::DeviceType deviceType)
+		const char *screenShotSavePath, const char *outFolder, ITMLibSettings::DeviceType deviceType)
 {
 	this->freeviewActive = false;
 	this->integrationActive = true;
@@ -507,12 +592,21 @@ void UIEngine::Initialise(int & argc, char** argv, ImageSourceEngine *imageSourc
 	this->imageSource = imageSource;
 	this->imuSource = imuSource;
 	this->mainEngine = mainEngine;
+	this->screenShotSavePath = screenShotSavePath;
 	{
 		size_t len = strlen(outFolder);
 		this->outFolder = new char[len + 1];
 		strcpy(this->outFolder, outFolder);
 	}
 
+	int folderCreatedSuccessfully = mkdir(this->screenShotSavePath,S_IRWXU|S_IRWXG|S_IRWXO);
+	if (folderCreatedSuccessfully==0) std::cout<<"Successfully created folder "<<this->screenShotSavePath<<std::endl;
+	else std::cout<<"Error creating folder "<<this->screenShotSavePath<<std::endl;
+	char meshSavePath[50];
+	sprintf(meshSavePath, "./%s/mesh",this->screenShotSavePath);
+	folderCreatedSuccessfully = mkdir(meshSavePath,S_IRWXU|S_IRWXG|S_IRWXO);
+	if (folderCreatedSuccessfully==0) std::cout<<"Successfully created folder Mesh"<<std::endl;
+		else std::cout<<"Error creating folder Mesh"<<std::endl;
 	//Vector2i winSize;
 	//int textHeight = 30; // Height of text area
 	//winSize.x = 2 * MAX(imageSource->getRGBImageSize().x, imageSource->getDepthImageSize().x);

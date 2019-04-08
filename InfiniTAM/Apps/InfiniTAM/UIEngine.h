@@ -86,11 +86,12 @@ namespace InfiniTAM
 			int processedFrameNo;
 			int trackingResult;
 			char *outFolder;
+			const char *screenShotSavePath;
 			bool needsRefresh;
 			ITMUChar4Image *saveImage;
 
 			void Initialise(int & argc, char** argv, InputSource::ImageSourceEngine *imageSource, InputSource::IMUSourceEngine *imuSource,
-				ITMLib::ITMMainEngine *mainEngine, const char *outFolder, ITMLib::ITMLibSettings::DeviceType deviceType);
+				ITMLib::ITMMainEngine *mainEngine, const char *screenShotSavePath , const char *outFolder, ITMLib::ITMLibSettings::DeviceType deviceType);
 			void Shutdown();
 
 			void Run();
