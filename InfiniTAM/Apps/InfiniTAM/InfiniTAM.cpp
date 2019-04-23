@@ -11,7 +11,7 @@
 #include "../../InputSource/PicoFlexxEngine.h"
 #include "../../InputSource/RealSenseEngine.h"
 #include "../../InputSource/LibUVCEngine.h"
-#include "../../InputSource/RealSense2Engine.h"
+#include "../../InputSource/RealSenseEngine.h"
 #include "../../InputSource/FFMPEGReader.h"
 #include "../../ITMLib/ITMLibDefines.h"
 #include "../../ITMLib/Core/ITMBasicEngine.h"
@@ -28,12 +28,12 @@ using namespace ITMLib;
     @para arg4 the IMU images. If images are omitted, some live sources will
     be tried.
 */
-static void CreateDefaultImageSource(ImageSourceEngine* & imageSource, IMUSourceEngine* & imuSource, const char *arg1, const char *arg2, const char *arg3, const char *arg4)
+static void CreateDefaultImageSource(ImageSourceEngine* & imageSource, IMUSourceEngine* & imuSource, const char *arg1, const char *arg2, const char *arg3, const char *arg5)
 {
 	const char *calibFile = arg1;
 	const char *filename1 = arg2;
 	const char *filename2 = arg3;
-	const char *filename_imu = arg4;
+	const char *filename_imu = arg5;
 
 	if (strcmp(calibFile, "viewer") == 0)
 	{
@@ -55,7 +55,7 @@ static void CreateDefaultImageSource(ImageSourceEngine* & imageSource, IMUSource
 		else
 		{
 			printf("using imu data: %s\n", filename_imu);
-			imageSource = new RawFileReader(calibFile, filename1, filename2, Vector2i(320, 240), 0.5f);
+			imageSource = new RawFileReader(calibFile, filename1, filename2, Vector2i(640, 480), 0.5f);
 			imuSource = new IMUSourceEngine(filename_imu);
 		}
 
@@ -116,18 +116,7 @@ static void CreateDefaultImageSource(ImageSourceEngine* & imageSource, IMUSource
 		}
 	}
 
-    if (imageSource == NULL)
-    {
-        printf("trying RealSense device with SDK 2.X (librealsense2)\n");
-        imageSource = new RealSense2Engine(calibFile);
-        if (imageSource->getDepthImageSize().x == 0)
-        {
-            delete imageSource;
-            imageSource = NULL;
-        }
-    }
-
-    if (imageSource == NULL)
+	if (imageSource == NULL)
 	{
 		printf("trying MS Kinect 2 device\n");
 		imageSource = new Kinect2Engine(calibFile);
@@ -157,6 +146,7 @@ try
 	const char *arg2 = NULL;
 	const char *arg3 = NULL;
 	const char *arg4 = NULL;
+	const char *arg5 = NULL;
 
 	int arg = 1;
 	do {
@@ -167,6 +157,8 @@ try
 		if (argv[arg] != NULL) arg3 = argv[arg]; else break;
 		++arg;
 		if (argv[arg] != NULL) arg4 = argv[arg]; else break;
+		++arg;
+		if (argv[arg] != NULL) arg5 = argv[arg]; else break;
 	} while (false);
 
 	if (arg == 1) {
@@ -184,7 +176,7 @@ try
 	ImageSourceEngine *imageSource = NULL;
 	IMUSourceEngine *imuSource = NULL;
 
-	CreateDefaultImageSource(imageSource, imuSource, arg1, arg2, arg3, arg4);
+	CreateDefaultImageSource(imageSource, imuSource, arg1, arg2, arg3, arg5);
 	if (imageSource==NULL)
 	{
 		std::cout << "failed to open any image stream" << std::endl;
@@ -210,7 +202,7 @@ try
 		break;
 	}
 
-	UIEngine::Instance()->Initialise(argc, argv, imageSource, imuSource, mainEngine, "./Files/Out", internalSettings->deviceType);
+	UIEngine::Instance()->Initialise(argc, argv, imageSource, imuSource, mainEngine, arg4, "./Files/Out", internalSettings->deviceType);
 	UIEngine::Instance()->Run();
 	UIEngine::Instance()->Shutdown();
 
